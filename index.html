@@ -619,14 +619,32 @@ sb.auth.onAuthStateChange(async (event, session)=>{
   }
 });
 
+/**
+ * Corre uma promise com um limite de tempo. Se a promise não resolver nem
+ * rejeitar dentro de `ms`, rejeita com um erro — evita que uma requisição de
+ * rede travada (sem erro, sem resposta) deixe a página presa para sempre.
+ */
+function withTimeout(promise, ms, message){
+  let timer;
+  const timeout = new Promise((_, reject)=>{
+    timer = setTimeout(()=>reject(new Error(message || 'Tempo esgotado ao conectar com o Supabase.')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(()=>clearTimeout(timer));
+}
+
 async function loadCurrentUser(authUser){
   try{
-    const {data, error} = await sb.from('usuarios').select('*').eq('id', authUser.id).maybeSingle();
+    const {data, error} = await withTimeout(
+      sb.from('usuarios').select('*').eq('id', authUser.id).maybeSingle(),
+      15000,
+      'Tempo esgotado ao verificar o usuário no Supabase.'
+    );
     if(error) throw error;
     currentUser = data || {id:authUser.id, email:authUser.email, nome:null, role:'operacional', motorista_cpf:null};
   }catch(err){
-    // Se a tabela "usuarios" ainda não existe (migração de roles não aplicada),
+    // Se a tabela "usuarios" ainda não existe, ou a conexão travou/expirou,
     // trata todo mundo como "operacional" para não travar o acesso ao sistema.
+    console.error('Erro ao carregar usuário atual (usando fallback operacional):', err);
     currentUser = {id:authUser.id, email:authUser.email, nome:null, role:'operacional', motorista_cpf:null};
   }
   document.getElementById('user-role-badge').textContent = ROLE_LABELS[currentUser.role] || '';
@@ -635,7 +653,7 @@ async function loadCurrentUser(authUser){
 async function boot(){
   bootLoading.style.display='flex';
   try{
-    await api.loadAll();
+    await withTimeout(api.loadAll(), 20000, 'Tempo esgotado ao carregar os dados do Supabase.');
     appShell.style.display='block';
     applyRoleVisibility();
     renderAll();
