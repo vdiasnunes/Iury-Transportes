@@ -137,6 +137,7 @@
   .kpi.amber .kpi-icon{background:var(--amber-tint);color:var(--amber-dark);}
 
   .grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:start;}
+  .grid-2 > *{min-width:0;}
   .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);}
   .panel-head{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
   .panel-head h3{margin:0;font-size:14.5px;font-weight:700;}
@@ -144,6 +145,7 @@
   .panel-body{padding:16px 18px;}
 
   table{width:100%;border-collapse:collapse;font-size:13px;}
+  .table-scroll{width:100%;}
   thead th{text-align:left;font-size:10.8px;text-transform:uppercase;letter-spacing:0.4px;color:var(--ink-soft);font-weight:700;padding:0 12px 10px;border-bottom:1px solid var(--border);}
   tbody td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
   tbody tr:last-child td{border-bottom:none;}
@@ -223,6 +225,8 @@
     .search-box{display:none;}
     .sidebar-toggle-btn{display:inline-flex;align-items:center;justify-content:center;}
     .topbar{align-items:center;}
+    .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -18px;padding:0 18px;}
+    .table-scroll table{width:auto;min-width:620px;}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>
@@ -308,7 +312,7 @@
         <div class="grid-2">
           <div class="panel">
             <div class="panel-head"><div><h3>Fretes aguardando coleta</h3><div class="sub">Cargas que ainda não foram coletadas no cliente</div></div></div>
-            <div class="panel-body"><table><thead><tr><th>Frete</th><th>Remetente</th><th>Destinatário</th><th>Cidade destino</th><th class="num">Valor</th></tr></thead><tbody id="tbl-pending-pickup"></tbody></table></div>
+            <div class="panel-body"><div class="table-scroll"><table><thead><tr><th>Frete</th><th>Remetente</th><th>Destinatário</th><th>Cidade destino</th><th class="num">Valor</th></tr></thead><tbody id="tbl-pending-pickup"></tbody></table></div></div>
           </div>
           <div class="panel">
             <div class="panel-head"><div><h3>Atividade recente</h3><div class="sub">Últimos eventos registrados</div></div></div>
@@ -320,14 +324,14 @@
       <section class="view" id="view-fretes">
         <div id="fretes-form-slot"></div>
         <div class="panel"><div class="panel-head"><div><h3>Fretes</h3><div class="sub">Cargas cadastradas, atribuídas ou não a uma viagem</div></div></div>
-          <div class="panel-body"><table><thead><tr><th>Frete</th><th>Remetente</th><th>Destinatário</th><th>Destino</th><th class="num">Peso</th><th class="num">Valor</th><th>Viagem</th><th>Status</th></tr></thead><tbody id="tbl-fretes"></tbody></table></div>
+          <div class="panel-body"><div class="table-scroll"><table><thead><tr><th>Frete</th><th>Remetente</th><th>Destinatário</th><th>Destino</th><th class="num">Peso</th><th class="num">Valor</th><th>Viagem</th><th>Status</th></tr></thead><tbody id="tbl-fretes"></tbody></table></div></div>
         </div>
       </section>
 
       <section class="view" id="view-viagens">
         <div id="viagens-form-slot"></div>
         <div class="panel"><div class="panel-head"><div><h3>Viagens</h3><div class="sub">Rotas com motorista, veículo e fretes atribuídos</div></div></div>
-          <div class="panel-body"><table><thead><tr><th>Viagem</th><th>Motorista</th><th>Veículo</th><th>Saída</th><th>Origem</th><th class="num">Fretes</th><th>Status</th><th></th></tr></thead><tbody id="tbl-viagens"></tbody></table></div>
+          <div class="panel-body"><div class="table-scroll"><table><thead><tr><th>Viagem</th><th>Motorista</th><th>Veículo</th><th>Saída</th><th>Origem</th><th class="num">Fretes</th><th>Status</th><th></th></tr></thead><tbody id="tbl-viagens"></tbody></table></div></div>
         </div>
         <div id="viagem-detail-slot"></div>
       </section>
@@ -335,14 +339,14 @@
       <section class="view" id="view-ocorrencias">
         <div id="ocorrencias-form-slot"></div>
         <div class="panel"><div class="panel-head"><div><h3>Ocorrências</h3><div class="sub">Atrasos, avarias e outros imprevistos registrados nos fretes</div></div></div>
-          <div class="panel-body"><table><thead><tr><th>Data</th><th>Frete</th><th>Destinatário</th><th>Tipo</th><th>Descrição</th></tr></thead><tbody id="tbl-ocorrencias"></tbody></table></div>
+          <div class="panel-body"><div class="table-scroll"><table><thead><tr><th>Data</th><th>Frete</th><th>Destinatário</th><th>Tipo</th><th>Descrição</th></tr></thead><tbody id="tbl-ocorrencias"></tbody></table></div></div>
         </div>
       </section>
 
       <section class="view" id="view-clientes">
         <div id="clientes-form-slot"></div>
         <div class="panel"><div class="panel-head"><div><h3>Clientes</h3><div class="sub">Remetentes e destinatários cadastrados</div></div></div>
-          <div class="panel-body"><table><thead><tr><th>Cliente</th><th>Documento</th><th>Telefone</th><th>Cidade</th><th>UF</th></tr></thead><tbody id="tbl-clientes"></tbody></table></div>
+          <div class="panel-body"><div class="table-scroll"><table><thead><tr><th>Cliente</th><th>Documento</th><th>Telefone</th><th>Cidade</th><th>UF</th></tr></thead><tbody id="tbl-clientes"></tbody></table></div></div>
         </div>
       </section>
 
@@ -352,14 +356,14 @@
             <div class="panel-head"><div><h3>Veículos</h3><div class="sub">Frota cadastrada</div></div></div>
             <div class="panel-body">
               <div id="veiculo-form-slot"></div>
-              <table><thead><tr><th>Placa</th><th>Modelo</th><th>Tipo</th><th class="num">Capacidade</th><th>Status</th></tr></thead><tbody id="tbl-veiculos"></tbody></table>
+              <div class="table-scroll"><table><thead><tr><th>Placa</th><th>Modelo</th><th>Tipo</th><th class="num">Capacidade</th><th>Status</th></tr></thead><tbody id="tbl-veiculos"></tbody></table></div>
             </div>
           </div>
           <div class="panel">
             <div class="panel-head"><div><h3>Motoristas</h3><div class="sub">Equipe de condutores</div></div></div>
             <div class="panel-body">
               <div id="motorista-form-slot"></div>
-              <table><thead><tr><th>Nome</th><th>CNH</th><th>Telefone</th><th>Status</th></tr></thead><tbody id="tbl-motoristas"></tbody></table>
+              <div class="table-scroll"><table><thead><tr><th>Nome</th><th>CNH</th><th>Telefone</th><th>Status</th></tr></thead><tbody id="tbl-motoristas"></tbody></table></div>
             </div>
           </div>
         </div>
@@ -368,7 +372,7 @@
       <section class="view" id="view-minhas-viagens">
         <div class="panel">
           <div class="panel-head"><div><h3>Minhas viagens</h3><div class="sub">Viagens atribuídas a você. Clique em uma para atualizar o andamento.</div></div></div>
-          <div class="panel-body"><table><thead><tr><th>Viagem</th><th>Veículo</th><th>Saída</th><th>Origem</th><th class="num">Fretes</th><th>Status</th></tr></thead><tbody id="tbl-minhas-viagens"></tbody></table></div>
+          <div class="panel-body"><div class="table-scroll"><table><thead><tr><th>Viagem</th><th>Veículo</th><th>Saída</th><th>Origem</th><th class="num">Fretes</th><th>Status</th></tr></thead><tbody id="tbl-minhas-viagens"></tbody></table></div></div>
         </div>
       </section>
 
@@ -378,7 +382,7 @@
           <div class="panel-body">
             <div id="usuario-form-slot"></div>
             <div class="helper" style="margin-top:0;margin-bottom:14px;">Novas contas também aparecem aqui automaticamente quando a pessoa se cadastra pela tela de login ("Criar conta") — nesse caso, entram como Motorista por padrão. Clique em um usuário para editar a role.</div>
-            <table><thead><tr><th>E-mail</th><th>Nome</th><th>Role</th><th>Motorista vinculado</th></tr></thead><tbody id="tbl-usuarios"></tbody></table>
+            <div class="table-scroll"><table><thead><tr><th>E-mail</th><th>Nome</th><th>Role</th><th>Motorista vinculado</th></tr></thead><tbody id="tbl-usuarios"></tbody></table></div>
           </div>
         </div>
       </section>
@@ -1152,7 +1156,7 @@ function renderMinhaViagemModalBody(id){
       <div style="font-size:13px;color:var(--ink-soft);">${esc(veiculoLabel(v.veiculo_placa))} · saída ${fmtData(v.data_saida)} · origem ${esc(v.origem)||'—'}</div>
       ${statusChip(v.status)}
     </div>
-    <table><thead><tr><th>Frete</th><th>Destinatário</th><th>Destino</th><th>Status</th><th></th></tr></thead>
+    <div class="table-scroll"><table><thead><tr><th>Frete</th><th>Destinatário</th><th>Destino</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${fretes.length ? fretes.map(f=>{
           const podeAvancar = f.status!=='Entregue' && f.status!=='Ocorrência';
@@ -1165,7 +1169,7 @@ function renderMinhaViagemModalBody(id){
           </tr>`;
         }).join('') : `<tr class="empty-row"><td colspan="5">Nenhum frete atribuído a esta viagem.</td></tr>`}
       </tbody>
-    </table>
+    </table></div>
     ${fretesElegiveis.length ? `
     <div class="inline-form" style="margin-top:16px;margin-bottom:0;">
       <div class="helper" style="margin-top:0;margin-bottom:8px;">Registrar ocorrência em um frete desta viagem:</div>
@@ -1519,7 +1523,7 @@ function renderViagemDetail(){
         <button class="btn btn-ghost btn-sm" id="via-close">Fechar</button>
       </div>
       <div class="panel-body">
-        <table><thead><tr><th>Frete</th><th>Destinatário</th><th>Destino</th><th>Status</th><th>Ações</th></tr></thead>
+        <div class="table-scroll"><table><thead><tr><th>Frete</th><th>Destinatário</th><th>Destino</th><th>Status</th><th>Ações</th></tr></thead>
           <tbody>
             ${fretes.length ? fretes.map(f=>{
               const canAdvance = f.status!=='Entregue' && f.status!=='Ocorrência';
@@ -1535,7 +1539,7 @@ function renderViagemDetail(){
               </tr>`;
             }).join('') : `<tr class="empty-row"><td colspan="5">Nenhum frete atribuído a esta viagem ainda.</td></tr>`}
           </tbody>
-        </table>
+        </table></div>
         <div class="helper" style="margin-top:14px;margin-bottom:6px;">Adicionar frete sem viagem a esta rota:</div>
         <div style="display:flex;gap:8px;align-items:center;">
           <select id="via-add-frete" style="max-width:320px;">${naoAtribuidos.length ? naoAtribuidos.map(f=>`<option value="${f.id}">${f.id} — ${esc(clienteNome(f.destinatario_id))}</option>`).join('') : '<option disabled>Nenhum frete disponível</option>'}</select>
