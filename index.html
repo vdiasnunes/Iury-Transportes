@@ -6,7 +6,6 @@
 <title>Iury Transportes — Gestão de Fretes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg:#F3F2EE;
@@ -391,7 +390,7 @@
 
 <div id="toast-container"></div>
 
-<script>
+<script defer>
 /* =========================================================================
    TRATAMENTO DE ERROS GLOBAL — mostra um aviso visível em vez de página
    em branco caso algo quebre durante o carregamento (ex: CDN bloqueado,
@@ -406,18 +405,168 @@ window.addEventListener('error', function(e){
   banner.textContent = 'Ocorreu um erro ao carregar o app: ' + (e.message || 'erro desconhecido') + ' — abra o console do navegador (F12) para mais detalhes.';
   document.body.prepend(banner);
 });
-if(!window.supabase){
-  document.body.innerHTML = '<div style="padding:40px;font-family:system-ui,sans-serif;color:#B94436;max-width:520px;margin:60px auto;line-height:1.6;">Não foi possível carregar a biblioteca do Supabase (o script de <code>cdn.jsdelivr.net</code> não rodou). Isso costuma acontecer por bloqueio de rede/CDN ou por falta de conexão no momento do carregamento. Recarregue a página; se persistir, verifique se o domínio <code>cdn.jsdelivr.net</code> está liberado no ambiente onde a página foi publicada.</div>';
-  throw new Error('Supabase SDK (window.supabase) não encontrado.');
-}
-
 /* =========================================================================
    CONFIGURAÇÃO SUPABASE
    ========================================================================= */
 const SUPABASE_URL = "https://opckgihstiapaypqboud.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_1eIQvqNO59-3UX4zQIcoCw_Ys7K8sSU";
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/* =========================================================================
+   CLIENT SUPABASE "LEVE" — feito só com fetch(), sem depender de nenhum
+   script externo (CDN). Implementa apenas o pedaço da API do supabase-js
+   que este app usa (auth por senha + from().select/insert/update). Isso
+   elimina qualquer dependência de rede para *carregar a biblioteca* — o
+   app funciona igual seja aberto via file://, servidor local ou hospedado.
+   ========================================================================= */
+function createLiteSupabaseClient(url, anonKey){
+  const AUTH_URL = url + '/auth/v1';
+  const REST_URL = url + '/rest/v1';
+  const STORAGE_KEY = 'lite-sb-session';
+  let session = null;
+  const listeners = [];
+
+  function loadSession(){
+    try{ const raw = localStorage.getItem(STORAGE_KEY); session = raw ? JSON.parse(raw) : null; }
+    catch(e){ session = null; }
+  }
+  function saveSession(s){
+    session = s;
+    try{
+      if(s) localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+      else localStorage.removeItem(STORAGE_KEY);
+    }catch(e){}
+  }
+  function notify(event){ listeners.forEach(cb=>{ try{ cb(event, session); }catch(e){ console.error(e); } }); }
+
+  async function authRequest(path, options={}){
+    let res;
+    try{
+      res = await fetch(AUTH_URL + path, {
+        ...options,
+        headers:{ 'Content-Type':'application/json', 'apikey':anonKey, ...(options.headers||{}) }
+      });
+    }catch(e){
+      return {data:null, error:{message:'Falha de rede ao conectar ao Supabase Auth.'}};
+    }
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) return {data:null, error:{message:data.error_description || data.msg || data.error || ('Erro '+res.status)}};
+    return {data, error:null};
+  }
+
+  function sessionFromToken(data, fallbackUser){
+    const expiresIn = data.expires_in || 3600;
+    return {
+      access_token:data.access_token,
+      refresh_token:data.refresh_token,
+      expires_at:Math.floor(Date.now()/1000) + expiresIn,
+      user:data.user || fallbackUser || null
+    };
+  }
+
+  async function ensureFreshSession(){
+    if(!session) return;
+    if(session.expires_at && (Date.now()/1000) < (session.expires_at - 60)) return;
+    if(!session.refresh_token){ saveSession(null); return; }
+    const {data, error} = await authRequest('/token?grant_type=refresh_token', {method:'POST', body:JSON.stringify({refresh_token:session.refresh_token})});
+    if(error || !data.access_token){ saveSession(null); notify('SIGNED_OUT'); return; }
+    saveSession(sessionFromToken(data, session.user));
+  }
+
+  loadSession();
+  setTimeout(async ()=>{ await ensureFreshSession(); notify(session ? 'SIGNED_IN' : 'SIGNED_OUT'); }, 0);
+
+  const auth = {
+    async signInWithPassword({email, password}){
+      const {data, error} = await authRequest('/token?grant_type=password', {method:'POST', body:JSON.stringify({email, password})});
+      if(error) return {data:null, error};
+      saveSession(sessionFromToken(data));
+      notify('SIGNED_IN');
+      return {data:{session, user:data.user}, error:null};
+    },
+    async signUp({email, password}){
+      const {data, error} = await authRequest('/signup', {method:'POST', body:JSON.stringify({email, password})});
+      if(error) return {data:null, error};
+      if(data.access_token){ saveSession(sessionFromToken(data)); notify('SIGNED_IN'); }
+      return {data, error:null};
+    },
+    async signOut(){
+      if(session && session.access_token){
+        try{ await authRequest('/logout', {method:'POST', headers:{Authorization:'Bearer '+session.access_token}}); }catch(e){}
+      }
+      saveSession(null);
+      notify('SIGNED_OUT');
+      return {error:null};
+    },
+    onAuthStateChange(cb){
+      listeners.push(cb);
+      return {data:{subscription:{unsubscribe(){ const i=listeners.indexOf(cb); if(i>=0) listeners.splice(i,1); }}}};
+    }
+  };
+
+  async function restRequest(method, path, body){
+    await ensureFreshSession();
+    const headers = {
+      'Content-Type':'application/json',
+      'apikey':anonKey,
+      'Authorization':'Bearer ' + (session ? session.access_token : anonKey)
+    };
+    if(method !== 'GET') headers['Prefer'] = 'return=representation';
+    let res;
+    try{
+      res = await fetch(REST_URL + path, {method, headers, body: body!==undefined ? JSON.stringify(body) : undefined});
+    }catch(e){
+      return {data:null, error:{message:'Falha de rede ao conectar ao Supabase.'}};
+    }
+    let data = null;
+    try{ data = await res.json(); }catch(e){ data = null; }
+    if(!res.ok) return {data:null, error:{message:(data && (data.message || data.error)) || ('Erro '+res.status)}};
+    return {data, error:null};
+  }
+
+  function from(table){
+    const q = {select:'*', filters:[], order:null, limit:null};
+    function buildQS(){
+      const params = new URLSearchParams();
+      params.set('select', q.select);
+      q.filters.forEach(([col,op,val])=>params.append(col, op+'.'+val));
+      if(q.order) params.set('order', q.order);
+      if(q.limit) params.set('limit', String(q.limit));
+      const s = params.toString();
+      return '/' + table + (s ? '?'+s : '');
+    }
+    async function runSelect(single){
+      const {data, error} = await restRequest('GET', buildQS());
+      if(error) return {data:null, error};
+      return single ? {data:(data && data[0]) || null, error:null} : {data, error:null};
+    }
+    const builder = {
+      select(cols){ q.select = cols || '*'; return builder; },
+      order(col, opts){ q.order = col + ((opts && opts.ascending===false) ? '.desc' : '.asc'); return builder; },
+      limit(n){ q.limit = n; return builder; },
+      eq(col, val){ q.filters.push([col,'eq',val]); return builder; },
+      maybeSingle(){ return runSelect(true); },
+      single(){ return runSelect(true); },
+      async insert(payload){
+        return restRequest('POST', '/' + table, payload);
+      },
+      update(payload){
+        return {
+          eq(col, val){
+            const params = new URLSearchParams();
+            params.append(col, 'eq.'+val);
+            return restRequest('PATCH', '/' + table + '?' + params.toString(), payload);
+          }
+        };
+      },
+      then(resolve, reject){ return runSelect(false).then(resolve, reject); }
+    };
+    return builder;
+  }
+
+  return { auth, from };
+}
+
+const sb = createLiteSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* =========================================================================
    ESTADO LOCAL (cache do que veio do Supabase)
