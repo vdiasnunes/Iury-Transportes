@@ -640,7 +640,19 @@ async function boot(){
     applyRoleVisibility();
     renderAll();
   }catch(err){
-    toast('Erro ao carregar dados do Supabase: ' + err.message, true);
+    // Se falhar aqui (ex: sessão salva expirada/inválida), NÃO deixa a página em
+    // branco: volta para a tela de login com o motivo do erro visível, e desloga
+    // a sessão problemática para permitir um novo login limpo.
+    console.error('Erro ao carregar dados do Supabase:', err);
+    appShell.style.display='none';
+    loginScreen.style.display='flex';
+    const errBox = document.getElementById('login-error');
+    if(errBox){
+      errBox.style.color='var(--red)'; errBox.style.background='var(--red-tint)';
+      errBox.textContent = 'Não foi possível carregar os dados (' + (err.message || 'erro desconhecido') + '). Faça login novamente.';
+      errBox.style.display='block';
+    }
+    try{ await sb.auth.signOut(); }catch(e){}
   }finally{
     bootLoading.style.display='none';
   }
