@@ -942,10 +942,10 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modalOverlay.
  * bodyHtml: HTML do formulário (usar ids únicos com prefixo "em-")
  * onSave: função async que lê os campos e chama o api.updateX correspondente
  */
-function openEditModal(title, bodyHtml, onSave){
+function openEditModal(title, bodyHtml, onSave, saveLabel){
   modalTitleEl.textContent = title;
   modalBodyEl.innerHTML = `<div class="form-grid">${bodyHtml}</div>`;
-  modalSaveBtn.textContent = 'Salvar alterações';
+  modalSaveBtn.textContent = saveLabel || 'Salvar alterações';
   modalSaveBtn.disabled = false;
   modalOverlay.classList.add('open');
   modalSaveBtn.onclick = ()=>withBusy(modalSaveBtn, async ()=>{
@@ -1306,29 +1306,25 @@ function renderDashboard(){
    ========================================================================= */
 function renderClientesForm(){
   const slot = document.getElementById('clientes-form-slot');
-  slot.innerHTML = `
-    <div class="inline-form">
-      <div class="form-grid">
-        <div class="field"><label>Nome / Razão social</label><input id="cli-nome" placeholder="ex: Mercadinho Bom Preço"></div>
-        <div class="field"><label>CNPJ/CPF</label><input id="cli-doc" placeholder="00.000.000/0000-00"></div>
-        <div class="field"><label>Telefone</label><input id="cli-tel" placeholder="(00) 00000-0000"></div>
-        <div class="field"><label>Cidade</label><input id="cli-cidade" placeholder="ex: Belo Horizonte"></div>
-        <div class="field"><label>UF</label><input id="cli-uf" placeholder="ex: MG" maxlength="2" style="text-transform:uppercase;"></div>
-      </div>
-      <div class="form-actions"><button class="btn btn-primary" id="cli-submit"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Cadastrar cliente</button></div>
-    </div>`;
-  document.getElementById('cli-submit').onclick = (e)=>withBusy(e.target.closest('button'), async ()=>{
-    const nome = document.getElementById('cli-nome').value.trim();
-    if(!nome){ toast('Informe o nome do cliente', true); return; }
-    const documento = document.getElementById('cli-doc').value.trim() || null;
-    const telefone = document.getElementById('cli-tel').value.trim() || null;
-    const cidade = document.getElementById('cli-cidade').value.trim() || null;
-    const uf = document.getElementById('cli-uf').value.trim().toUpperCase() || null;
-    await api.createCliente({nome, documento, telefone, cidade, uf});
-    toast(`Cliente ${nome} cadastrado`);
-    await api.loadAll();
-    renderAll();
-  });
+  slot.innerHTML = `<div class="form-actions" style="margin-bottom:14px;"><button class="btn btn-primary" id="cli-open-btn"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Cadastrar cliente</button></div>`;
+  document.getElementById('cli-open-btn').onclick = ()=>{
+    openEditModal('Cadastrar cliente', `
+      <div class="field"><label>Nome / Razão social</label><input id="cli-nome" placeholder="ex: Mercadinho Bom Preço"></div>
+      <div class="field"><label>CNPJ/CPF</label><input id="cli-doc" placeholder="00.000.000/0000-00"></div>
+      <div class="field"><label>Telefone</label><input id="cli-tel" placeholder="(00) 00000-0000"></div>
+      <div class="field"><label>Cidade</label><input id="cli-cidade" placeholder="ex: Belo Horizonte"></div>
+      <div class="field"><label>UF</label><input id="cli-uf" placeholder="ex: MG" maxlength="2" style="text-transform:uppercase;"></div>
+    `, async ()=>{
+      const nome = fieldVal('cli-nome');
+      if(!nome) throw new Error('Informe o nome do cliente');
+      const documento = fieldVal('cli-doc') || null;
+      const telefone = fieldVal('cli-tel') || null;
+      const cidade = fieldVal('cli-cidade') || null;
+      const uf = fieldVal('cli-uf').toUpperCase() || null;
+      await api.createCliente({nome, documento, telefone, cidade, uf});
+      toast(`Cliente ${nome} cadastrado`);
+    }, 'Cadastrar cliente');
+  };
 }
 function renderClientes(){
   renderClientesForm();
@@ -1344,53 +1340,45 @@ function renderClientes(){
    ========================================================================= */
 function renderVeiculoForm(){
   const slot = document.getElementById('veiculo-form-slot');
-  slot.innerHTML = `
-    <div class="inline-form">
-      <div class="form-grid">
-        <div class="field"><label>Placa</label><input id="vei-placa" placeholder="ABC1D23" style="text-transform:uppercase;"></div>
-        <div class="field"><label>Modelo</label><input id="vei-modelo" placeholder="ex: Scania R450"></div>
-        <div class="field"><label>Tipo</label><select id="vei-tipo"><option>Truck</option><option>Toco</option><option>Carreta</option><option>Van</option><option>Utilitário</option></select></div>
-        <div class="field"><label>Capacidade (kg)</label><input id="vei-capacidade" type="number" min="1" value="1000"></div>
-      </div>
-      <div class="form-actions"><button class="btn btn-primary btn-sm" id="vei-submit">+ adicionar veículo</button></div>
-    </div>`;
-  document.getElementById('vei-submit').onclick = (e)=>withBusy(e.target.closest('button'), async ()=>{
-    const placa = document.getElementById('vei-placa').value.trim().toUpperCase();
-    if(!placa){ toast('Informe a placa do veículo', true); return; }
-    if(state.veiculos.some(v=>v.placa===placa)){ toast('Já existe um veículo com essa placa', true); return; }
-    const modelo = document.getElementById('vei-modelo').value.trim() || '—';
-    const tipo = document.getElementById('vei-tipo').value;
-    const capacidade_kg = +document.getElementById('vei-capacidade').value || 1000;
-    await api.createVeiculo({placa, modelo, tipo, capacidade_kg});
-    toast(`Veículo ${placa} cadastrado`);
-    await api.loadAll();
-    renderAll();
-  });
+  slot.innerHTML = `<div class="form-actions" style="margin-bottom:14px;"><button class="btn btn-primary btn-sm" id="vei-open-btn">+ adicionar veículo</button></div>`;
+  document.getElementById('vei-open-btn').onclick = ()=>{
+    openEditModal('Adicionar veículo', `
+      <div class="field"><label>Placa</label><input id="vei-placa" placeholder="ABC1D23" style="text-transform:uppercase;"></div>
+      <div class="field"><label>Modelo</label><input id="vei-modelo" placeholder="ex: Scania R450"></div>
+      <div class="field"><label>Tipo</label><select id="vei-tipo"><option>Truck</option><option>Toco</option><option>Carreta</option><option>Van</option><option>Utilitário</option></select></div>
+      <div class="field"><label>Capacidade (kg)</label><input id="vei-capacidade" type="number" min="1" value="1000"></div>
+    `, async ()=>{
+      const placa = fieldVal('vei-placa').toUpperCase();
+      if(!placa) throw new Error('Informe a placa do veículo');
+      if(state.veiculos.some(v=>v.placa===placa)) throw new Error('Já existe um veículo com essa placa');
+      const modelo = fieldVal('vei-modelo') || '—';
+      const tipo = document.getElementById('vei-tipo').value;
+      const capacidade_kg = +document.getElementById('vei-capacidade').value || 1000;
+      await api.createVeiculo({placa, modelo, tipo, capacidade_kg});
+      toast(`Veículo ${placa} cadastrado`);
+    }, 'Adicionar veículo');
+  };
 }
 function renderMotoristaForm(){
   const slot = document.getElementById('motorista-form-slot');
-  slot.innerHTML = `
-    <div class="inline-form">
-      <div class="form-grid">
-        <div class="field"><label>Nome</label><input id="mot-nome" placeholder="Nome completo"></div>
-        <div class="field"><label>CPF</label><input id="mot-cpf" placeholder="000.000.000-00"></div>
-        <div class="field"><label>CNH</label><input id="mot-cnh" placeholder="registro / categoria"></div>
-        <div class="field"><label>Telefone</label><input id="mot-tel" placeholder="(00) 00000-0000"></div>
-      </div>
-      <div class="form-actions"><button class="btn btn-primary btn-sm" id="mot-submit">+ adicionar motorista</button></div>
-    </div>`;
-  document.getElementById('mot-submit').onclick = (e)=>withBusy(e.target.closest('button'), async ()=>{
-    const nome = document.getElementById('mot-nome').value.trim();
-    const cpf = document.getElementById('mot-cpf').value.trim();
-    if(!nome || !cpf){ toast('Informe nome e CPF do motorista', true); return; }
-    if(state.motoristas.some(m=>m.cpf===cpf)){ toast('Já existe um motorista com esse CPF', true); return; }
-    const cnh = document.getElementById('mot-cnh').value.trim() || null;
-    const telefone = document.getElementById('mot-tel').value.trim() || null;
-    await api.createMotorista({cpf, nome, cnh, telefone});
-    toast(`Motorista ${nome} cadastrado`);
-    await api.loadAll();
-    renderAll();
-  });
+  slot.innerHTML = `<div class="form-actions" style="margin-bottom:14px;"><button class="btn btn-primary btn-sm" id="mot-open-btn">+ adicionar motorista</button></div>`;
+  document.getElementById('mot-open-btn').onclick = ()=>{
+    openEditModal('Adicionar motorista', `
+      <div class="field"><label>Nome</label><input id="mot-nome" placeholder="Nome completo"></div>
+      <div class="field"><label>CPF</label><input id="mot-cpf" placeholder="000.000.000-00"></div>
+      <div class="field"><label>CNH</label><input id="mot-cnh" placeholder="registro / categoria"></div>
+      <div class="field"><label>Telefone</label><input id="mot-tel" placeholder="(00) 00000-0000"></div>
+    `, async ()=>{
+      const nome = fieldVal('mot-nome');
+      const cpf = fieldVal('mot-cpf');
+      if(!nome || !cpf) throw new Error('Informe nome e CPF do motorista');
+      if(state.motoristas.some(m=>m.cpf===cpf)) throw new Error('Já existe um motorista com esse CPF');
+      const cnh = fieldVal('mot-cnh') || null;
+      const telefone = fieldVal('mot-tel') || null;
+      await api.createMotorista({cpf, nome, cnh, telefone});
+      toast(`Motorista ${nome} cadastrado`);
+    }, 'Adicionar motorista');
+  };
 }
 function renderFrota(){
   renderVeiculoForm();
@@ -1410,36 +1398,32 @@ function renderFrota(){
    ========================================================================= */
 function renderFretesForm(){
   const slot = document.getElementById('fretes-form-slot');
-  const clienteOptions = state.clientes.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('');
-  slot.innerHTML = `
-    <div class="inline-form">
-      <div class="form-grid">
-        <div class="field"><label>Remetente</label><select id="frt-remetente">${clienteOptions || '<option disabled>Cadastre um cliente primeiro</option>'}</select></div>
-        <div class="field"><label>Destinatário</label><select id="frt-destinatario">${clienteOptions || '<option disabled>Cadastre um cliente primeiro</option>'}</select></div>
-        <div class="field"><label>Endereço de coleta</label><input id="frt-coleta" placeholder="Rua, número, cidade/UF"></div>
-        <div class="field"><label>Endereço de entrega</label><input id="frt-entrega" placeholder="Rua, número, cidade/UF"></div>
-        <div class="field"><label>Descrição da carga</label><input id="frt-desc" placeholder="ex: 10 caixas de mercadoria"></div>
-        <div class="field"><label>Peso (kg)</label><input id="frt-peso" type="number" min="0" value="100"></div>
-        <div class="field"><label>Volumes</label><input id="frt-volumes" type="number" min="1" value="1"></div>
-        <div class="field"><label>Valor do frete (R$)</label><input id="frt-valor" type="number" min="0" step="0.01" value="0"></div>
-      </div>
-      <div class="form-actions"><button class="btn btn-primary" id="frt-submit"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Cadastrar frete</button></div>
-    </div>`;
-  document.getElementById('frt-submit').onclick = (e)=>withBusy(e.target.closest('button'), async ()=>{
+  slot.innerHTML = `<div class="form-actions" style="margin-bottom:14px;"><button class="btn btn-primary" id="frt-open-btn"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Cadastrar frete</button></div>`;
+  document.getElementById('frt-open-btn').onclick = ()=>{
     if(!state.clientes.length){ toast('Cadastre ao menos um cliente antes de criar um frete', true); return; }
-    const remetente_id = +document.getElementById('frt-remetente').value;
-    const destinatario_id = +document.getElementById('frt-destinatario').value;
-    const endereco_coleta = document.getElementById('frt-coleta').value.trim() || null;
-    const endereco_entrega = document.getElementById('frt-entrega').value.trim() || null;
-    const descricao_carga = document.getElementById('frt-desc').value.trim() || null;
-    const peso_kg = +document.getElementById('frt-peso').value || 0;
-    const volumes = +document.getElementById('frt-volumes').value || 1;
-    const valor_frete = +document.getElementById('frt-valor').value || 0;
-    const id = await api.createFrete({remetente_id, destinatario_id, endereco_coleta, endereco_entrega, descricao_carga, peso_kg, volumes, valor_frete, viagem_id:null});
-    toast(`Frete ${id} cadastrado`);
-    await api.loadAll();
-    renderAll();
-  });
+    const clienteOptions = state.clientes.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+    openEditModal('Cadastrar frete', `
+      <div class="field"><label>Remetente</label><select id="frt-remetente">${clienteOptions}</select></div>
+      <div class="field"><label>Destinatário</label><select id="frt-destinatario">${clienteOptions}</select></div>
+      <div class="field"><label>Endereço de coleta</label><input id="frt-coleta" placeholder="Rua, número, cidade/UF"></div>
+      <div class="field"><label>Endereço de entrega</label><input id="frt-entrega" placeholder="Rua, número, cidade/UF"></div>
+      <div class="field"><label>Descrição da carga</label><input id="frt-desc" placeholder="ex: 10 caixas de mercadoria"></div>
+      <div class="field"><label>Peso (kg)</label><input id="frt-peso" type="number" min="0" value="100"></div>
+      <div class="field"><label>Volumes</label><input id="frt-volumes" type="number" min="1" value="1"></div>
+      <div class="field"><label>Valor do frete (R$)</label><input id="frt-valor" type="number" min="0" step="0.01" value="0"></div>
+    `, async ()=>{
+      const remetente_id = +document.getElementById('frt-remetente').value;
+      const destinatario_id = +document.getElementById('frt-destinatario').value;
+      const endereco_coleta = fieldVal('frt-coleta') || null;
+      const endereco_entrega = fieldVal('frt-entrega') || null;
+      const descricao_carga = fieldVal('frt-desc') || null;
+      const peso_kg = +document.getElementById('frt-peso').value || 0;
+      const volumes = +document.getElementById('frt-volumes').value || 1;
+      const valor_frete = +document.getElementById('frt-valor').value || 0;
+      const id = await api.createFrete({remetente_id, destinatario_id, endereco_coleta, endereco_entrega, descricao_carga, peso_kg, volumes, valor_frete, viagem_id:null});
+      toast(`Frete ${id} cadastrado`);
+    }, 'Cadastrar frete');
+  };
 }
 function renderFretes(){
   renderFretesForm();
@@ -1464,29 +1448,26 @@ function renderFretes(){
    ========================================================================= */
 function renderViagensForm(){
   const slot = document.getElementById('viagens-form-slot');
-  const motoristasDisp = state.motoristas.filter(m=>motoristaStatus(m.cpf)==='Disponível');
-  const veiculosDisp = state.veiculos.filter(v=>veiculoStatus(v.placa)==='Disponível');
-  slot.innerHTML = `
-    <div class="inline-form">
-      <div class="form-grid">
-        <div class="field"><label>Motorista</label><select id="via-motorista">${motoristasDisp.length ? motoristasDisp.map(m=>`<option value="${m.cpf}">${esc(m.nome)}</option>`).join('') : '<option disabled>Nenhum motorista disponível</option>'}</select></div>
-        <div class="field"><label>Veículo</label><select id="via-veiculo">${veiculosDisp.length ? veiculosDisp.map(v=>`<option value="${v.placa}">${v.placa} — ${esc(v.modelo)}</option>`).join('') : '<option disabled>Nenhum veículo disponível</option>'}</select></div>
-        <div class="field"><label>Data de saída</label><input id="via-data" type="date"></div>
-        <div class="field"><label>Origem</label><input id="via-origem" placeholder="Cidade/UF de saída"></div>
-      </div>
-      <div class="form-actions"><button class="btn btn-primary" id="via-submit"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Planejar viagem</button></div>
-    </div>`;
-  document.getElementById('via-submit').onclick = (e)=>withBusy(e.target.closest('button'), async ()=>{
-    const motoristaSel = document.getElementById('via-motorista');
-    const veiculoSel = document.getElementById('via-veiculo');
-    if(!motoristaSel.value || !veiculoSel.value){ toast('É preciso ter motorista e veículo disponíveis', true); return; }
-    const data_saida = document.getElementById('via-data').value || null;
-    const origem = document.getElementById('via-origem').value.trim() || null;
-    const id = await api.createViagem({motorista_cpf:motoristaSel.value, veiculo_placa:veiculoSel.value, data_saida, origem});
-    toast(`Viagem ${id} planejada`);
-    await api.loadAll();
-    renderAll();
-  });
+  slot.innerHTML = `<div class="form-actions" style="margin-bottom:14px;"><button class="btn btn-primary" id="via-open-btn"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Planejar viagem</button></div>`;
+  document.getElementById('via-open-btn').onclick = ()=>{
+    const motoristasDisp = state.motoristas.filter(m=>motoristaStatus(m.cpf)==='Disponível');
+    const veiculosDisp = state.veiculos.filter(v=>veiculoStatus(v.placa)==='Disponível');
+    if(!motoristasDisp.length || !veiculosDisp.length){ toast('É preciso ter motorista e veículo disponíveis', true); return; }
+    openEditModal('Planejar viagem', `
+      <div class="field"><label>Motorista</label><select id="via-motorista">${motoristasDisp.map(m=>`<option value="${m.cpf}">${esc(m.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label>Veículo</label><select id="via-veiculo">${veiculosDisp.map(v=>`<option value="${v.placa}">${v.placa} — ${esc(v.modelo)}</option>`).join('')}</select></div>
+      <div class="field"><label>Data de saída</label><input id="via-data" type="date"></div>
+      <div class="field"><label>Origem</label><input id="via-origem" placeholder="Cidade/UF de saída"></div>
+    `, async ()=>{
+      const motoristaSel = document.getElementById('via-motorista');
+      const veiculoSel = document.getElementById('via-veiculo');
+      if(!motoristaSel.value || !veiculoSel.value) throw new Error('É preciso ter motorista e veículo disponíveis');
+      const data_saida = document.getElementById('via-data').value || null;
+      const origem = fieldVal('via-origem') || null;
+      const id = await api.createViagem({motorista_cpf:motoristaSel.value, veiculo_placa:veiculoSel.value, data_saida, origem});
+      toast(`Viagem ${id} planejada`);
+    }, 'Planejar viagem');
+  };
 }
 function renderViagens(){
   renderViagensForm();
@@ -1502,7 +1483,7 @@ function renderViagens(){
       <td>${esc(v.origem)||'—'}</td>
       <td class="num">${n}</td>
       <td>${statusChip(v.status)}</td>
-      <td style="display:flex;gap:6px;">${advanceBtn}<button class="btn btn-sm btn-ghost via-manage" data-id="${v.id}">Gerenciar</button></td>
+      <td><div style="display:flex;gap:6px;">${advanceBtn}<button class="btn btn-sm btn-ghost via-manage" data-id="${v.id}">Gerenciar</button></div></td>
     </tr>`;
   }).join('') : `<tr class="empty-row"><td colspan="8">Nenhuma viagem cadastrada.</td></tr>`;
 
@@ -1538,7 +1519,7 @@ function renderViagemDetail(){
         <button class="btn btn-ghost btn-sm" id="via-close">Fechar</button>
       </div>
       <div class="panel-body">
-        <table><thead><tr><th>Frete</th><th>Destinatário</th><th>Destino</th><th>Status</th><th></th></tr></thead>
+        <table><thead><tr><th>Frete</th><th>Destinatário</th><th>Destino</th><th>Status</th><th>Ações</th></tr></thead>
           <tbody>
             ${fretes.length ? fretes.map(f=>{
               const canAdvance = f.status!=='Entregue' && f.status!=='Ocorrência';
@@ -1547,10 +1528,10 @@ function renderViagemDetail(){
                 <td>${esc(clienteNome(f.destinatario_id))}</td>
                 <td>${esc(clienteCidadeUf(f.destinatario_id))}</td>
                 <td>${statusChip(f.status)}</td>
-                <td style="display:flex;gap:6px;">
+                <td><div style="display:flex;gap:6px;align-items:center;">
                   ${canAdvance ? `<button class="btn btn-sm btn-amber frt-advance" data-id="${f.id}" data-status="${f.status}">Avançar</button>` : ''}
                   ${f.status!=='Entregue' ? `<button class="btn btn-sm btn-ghost frt-occur" data-id="${f.id}">Ocorrência</button>` : ''}
-                </td>
+                </div></td>
               </tr>`;
             }).join('') : `<tr class="empty-row"><td colspan="5">Nenhum frete atribuído a esta viagem ainda.</td></tr>`}
           </tbody>
@@ -1569,10 +1550,7 @@ function renderViagemDetail(){
     await api.loadAll();
     renderAll();
   }));
-  slot.querySelectorAll('.frt-occur').forEach(btn=>btn.onclick = ()=>{
-    showView('ocorrencias');
-    setTimeout(()=>{ const sel = document.getElementById('oco-frete'); if(sel) sel.value = btn.dataset.id; }, 0);
-  });
+  slot.querySelectorAll('.frt-occur').forEach(btn=>btn.onclick = ()=>openOcorrenciaModal(btn.dataset.id));
   const addBtn = document.getElementById('via-add-submit');
   if(addBtn) addBtn.onclick = ()=>withBusy(addBtn, async ()=>{
     const freteId = document.getElementById('via-add-frete').value;
@@ -1586,28 +1564,25 @@ function renderViagemDetail(){
 /* =========================================================================
    RENDER: OCORRÊNCIAS
    ========================================================================= */
-function renderOcorrenciasForm(){
-  const slot = document.getElementById('ocorrencias-form-slot');
+function openOcorrenciaModal(preselectFreteId){
   const fretesElegiveis = state.fretes.filter(f=>f.status!=='Entregue');
-  slot.innerHTML = `
-    <div class="inline-form">
-      <div class="form-grid">
-        <div class="field"><label>Frete</label><select id="oco-frete">${fretesElegiveis.length ? fretesElegiveis.map(f=>`<option value="${f.id}">${f.id} — ${esc(clienteNome(f.destinatario_id))}</option>`).join('') : '<option disabled>Nenhum frete elegível</option>'}</select></div>
-        <div class="field"><label>Tipo</label><select id="oco-tipo"><option>Atraso</option><option>Avaria</option><option>Extravio</option><option>Outro</option></select></div>
-        <div class="field" style="grid-column:1/-1;"><label>Descrição</label><input id="oco-desc" placeholder="Descreva o ocorrido"></div>
-      </div>
-      <div class="form-actions"><button class="btn btn-primary" id="oco-submit" ${fretesElegiveis.length?'':'disabled'}><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Registrar ocorrência</button></div>
-    </div>`;
-  const submitBtn = document.getElementById('oco-submit');
-  if(submitBtn) submitBtn.onclick = (e)=>withBusy(e.target.closest('button'), async ()=>{
+  if(!fretesElegiveis.length){ toast('Nenhum frete elegível para registrar ocorrência', true); return; }
+  openEditModal('Registrar ocorrência', `
+    <div class="field"><label>Frete</label><select id="oco-frete">${fretesElegiveis.map(f=>`<option value="${f.id}" ${f.id===preselectFreteId?'selected':''}>${f.id} — ${esc(clienteNome(f.destinatario_id))}</option>`).join('')}</select></div>
+    <div class="field"><label>Tipo</label><select id="oco-tipo"><option>Atraso</option><option>Avaria</option><option>Extravio</option><option>Outro</option></select></div>
+    <div class="field" style="grid-column:1/-1;"><label>Descrição</label><input id="oco-desc" placeholder="Descreva o ocorrido"></div>
+  `, async ()=>{
     const frete_id = document.getElementById('oco-frete').value;
     const tipo = document.getElementById('oco-tipo').value;
-    const descricao = document.getElementById('oco-desc').value.trim() || null;
+    const descricao = fieldVal('oco-desc') || null;
     await api.createOcorrencia({frete_id, tipo, descricao});
     toast('Ocorrência registrada');
-    await api.loadAll();
-    renderAll();
-  });
+  }, 'Registrar ocorrência');
+}
+function renderOcorrenciasForm(){
+  const slot = document.getElementById('ocorrencias-form-slot');
+  slot.innerHTML = `<div class="form-actions" style="margin-bottom:14px;"><button class="btn btn-primary" id="oco-open-btn"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Registrar ocorrência</button></div>`;
+  document.getElementById('oco-open-btn').onclick = ()=>openOcorrenciaModal(null);
 }
 function renderOcorrencias(){
   renderOcorrenciasForm();
@@ -1645,40 +1620,36 @@ function renderMinhasViagens(){
 function renderUsuarioForm(){
   const slot = document.getElementById('usuario-form-slot');
   if(!slot) return;
-  slot.innerHTML = `
-    <div class="inline-form">
-      <div class="form-grid">
-        <div class="field"><label>Nome</label><input id="usr-nome" placeholder="Nome completo"></div>
-        <div class="field"><label>E-mail</label><input id="usr-email" type="email" placeholder="pessoa@empresa.com"></div>
-        <div class="field"><label>Senha provisória</label><input id="usr-senha" type="password" placeholder="mínimo 6 caracteres"></div>
-        <div class="field"><label>Role</label><select id="usr-role">
-          <option value="operacional">Operacional</option>
-          <option value="administrativo">Administrativo</option>
-          <option value="motorista">Motorista</option>
-        </select></div>
-        <div class="field" style="grid-column:1/-1;"><label>Motorista vinculado (obrigatório se a role for Motorista)</label>
-          <select id="usr-motorista">
-            <option value="">— nenhum —</option>
-            ${state.motoristas.map(m=>`<option value="${m.cpf}">${esc(m.nome)} (${m.cpf})</option>`).join('')}
-          </select>
-        </div>
+  slot.innerHTML = `<div class="form-actions" style="margin-bottom:14px;"><button class="btn btn-primary" id="usr-open-btn"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Adicionar usuário</button></div>`;
+  document.getElementById('usr-open-btn').onclick = ()=>{
+    openEditModal('Adicionar usuário', `
+      <div class="field"><label>Nome</label><input id="usr-nome" placeholder="Nome completo"></div>
+      <div class="field"><label>E-mail</label><input id="usr-email" type="email" placeholder="pessoa@empresa.com"></div>
+      <div class="field"><label>Senha provisória</label><input id="usr-senha" type="password" placeholder="mínimo 6 caracteres"></div>
+      <div class="field"><label>Role</label><select id="usr-role">
+        <option value="operacional">Operacional</option>
+        <option value="administrativo">Administrativo</option>
+        <option value="motorista">Motorista</option>
+      </select></div>
+      <div class="field" style="grid-column:1/-1;"><label>Motorista vinculado (obrigatório se a role for Motorista)</label>
+        <select id="usr-motorista">
+          <option value="">— nenhum —</option>
+          ${state.motoristas.map(m=>`<option value="${m.cpf}">${esc(m.nome)} (${m.cpf})</option>`).join('')}
+        </select>
       </div>
-      <div class="form-actions"><button class="btn btn-primary" id="usr-submit"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Adicionar usuário</button></div>
-    </div>`;
-  document.getElementById('usr-submit').onclick = (e)=>withBusy(e.target.closest('button'), async ()=>{
-    const nome = document.getElementById('usr-nome').value.trim() || null;
-    const email = document.getElementById('usr-email').value.trim();
-    const password = document.getElementById('usr-senha').value;
-    const role = document.getElementById('usr-role').value;
-    const motorista_cpf = document.getElementById('usr-motorista').value || null;
-    if(!email){ toast('Informe o e-mail do usuário', true); return; }
-    if(!password || password.length < 6){ toast('A senha deve ter pelo menos 6 caracteres', true); return; }
-    if(role==='motorista' && !motorista_cpf){ toast('Selecione o motorista vinculado a esta conta', true); return; }
-    await api.createUsuario({email, password, nome, role, motorista_cpf});
-    toast(`Usuário ${email} cadastrado`);
-    await api.loadAll();
-    renderAll();
-  });
+    `, async ()=>{
+      const nome = fieldVal('usr-nome') || null;
+      const email = fieldVal('usr-email');
+      const password = document.getElementById('usr-senha').value;
+      const role = document.getElementById('usr-role').value;
+      const motorista_cpf = document.getElementById('usr-motorista').value || null;
+      if(!email) throw new Error('Informe o e-mail do usuário');
+      if(!password || password.length < 6) throw new Error('A senha deve ter pelo menos 6 caracteres');
+      if(role==='motorista' && !motorista_cpf) throw new Error('Selecione o motorista vinculado a esta conta');
+      await api.createUsuario({email, password, nome, role, motorista_cpf});
+      toast(`Usuário ${email} cadastrado`);
+    }, 'Adicionar usuário');
+  };
 }
 function renderUsuarios(){
   renderUsuarioForm();
