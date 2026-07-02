@@ -197,6 +197,21 @@
   .toast::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;}
   @keyframes slidein{from{opacity:0;transform:translateX(14px);}to{opacity:1;transform:none;}}
 
+  /* ================= MODAL DE EDIÇÃO ================= */
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,17,16,0.45);display:none;align-items:center;justify-content:center;z-index:300;padding:20px;}
+  .modal-overlay.open{display:flex;}
+  .modal-card{width:100%;max-width:560px;max-height:88vh;overflow-y:auto;background:var(--panel);border-radius:14px;box-shadow:var(--shadow-lg);}
+  .modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;background:var(--panel);border-radius:14px 14px 0 0;}
+  .modal-head h3{margin:0;font-size:15.5px;font-weight:700;}
+  .modal-close-btn{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px;border-radius:6px;}
+  .modal-close-btn:hover{background:rgba(0,0,0,0.05);color:var(--ink);}
+  .modal-body{padding:18px 20px;}
+  .modal-actions{padding:14px 20px 18px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);}
+  .modal-readonly{background:#F1F0EB;color:var(--ink-soft);}
+  .modal-danger{color:var(--red);background:none;border:none;cursor:pointer;font-size:12.5px;font-weight:600;margin-right:auto;padding:8px 4px;}
+  tbody tr[data-clickable]{cursor:pointer;}
+  tbody tr[data-clickable]:hover{background:rgba(47,143,224,0.06);}
+
   @media (max-width:1080px){.grid-2{grid-template-columns:1fr;}}
   @media (max-width:760px){
     .sidebar{position:fixed;left:-246px;z-index:50;transition:left .18s ease;}
@@ -341,6 +356,20 @@
 </div>
 </div>
 
+<div id="edit-modal-overlay" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="modal-title">Editar</h3>
+      <button class="modal-close-btn" id="modal-close-btn">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-actions" id="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel-btn">Cancelar</button>
+      <button class="btn btn-primary" id="modal-save-btn">Salvar alterações</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast-container"></div>
 
 <script>
@@ -439,6 +468,36 @@ const api = {
     const {error:e2} = await sb.from('fretes').update({status:'Ocorrência'}).eq('id', frete_id);
     if(e2) throw e2;
     await logActivity(`Ocorrência registrada no frete ${frete_id}: ${tipo}`);
+  },
+  async updateCliente(id, patch){
+    const {error} = await sb.from('clientes').update(patch).eq('id', id);
+    if(error) throw error;
+    await logActivity(`Cliente ${patch.nome||id} atualizado`);
+  },
+  async updateVeiculo(placa, patch){
+    const {error} = await sb.from('veiculos').update(patch).eq('placa', placa);
+    if(error) throw error;
+    await logActivity(`Veículo ${placa} atualizado`);
+  },
+  async updateMotorista(cpf, patch){
+    const {error} = await sb.from('motoristas').update(patch).eq('cpf', cpf);
+    if(error) throw error;
+    await logActivity(`Motorista ${patch.nome||cpf} atualizado`);
+  },
+  async updateFrete(id, patch){
+    const {error} = await sb.from('fretes').update(patch).eq('id', id);
+    if(error) throw error;
+    await logActivity(`Frete ${id} atualizado`);
+  },
+  async updateViagem(id, patch){
+    const {error} = await sb.from('viagens').update(patch).eq('id', id);
+    if(error) throw error;
+    await logActivity(`Viagem ${id} atualizada`);
+  },
+  async updateOcorrencia(id, patch){
+    const {error} = await sb.from('ocorrencias').update(patch).eq('id', id);
+    if(error) throw error;
+    await logActivity(`Ocorrência ${id} atualizada`);
   },
 };
 async function logActivity(text){ await sb.from('activity_log').insert({text}); }
@@ -552,6 +611,177 @@ function statusChip(status){
 }
 
 /* =========================================================================
+   MODAL DE EDIÇÃO (genérico, reutilizado por todas as páginas)
+   ========================================================================= */
+const modalOverlay = document.getElementById('edit-modal-overlay');
+const modalTitleEl = document.getElementById('modal-title');
+const modalBodyEl = document.getElementById('modal-body');
+const modalSaveBtn = document.getElementById('modal-save-btn');
+const modalCancelBtn = document.getElementById('modal-cancel-btn');
+const modalCloseBtn = document.getElementById('modal-close-btn');
+
+function closeModal(){
+  modalOverlay.classList.remove('open');
+  modalBodyEl.innerHTML = '';
+  modalSaveBtn.onclick = null;
+}
+modalCancelBtn.onclick = closeModal;
+modalCloseBtn.onclick = closeModal;
+modalOverlay.addEventListener('click', (e)=>{ if(e.target === modalOverlay) closeModal(); });
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modalOverlay.classList.contains('open')) closeModal(); });
+
+/**
+ * Abre o modal de edição.
+ * title: título exibido no cabeçalho
+ * bodyHtml: HTML do formulário (usar ids únicos com prefixo "em-")
+ * onSave: função async que lê os campos e chama o api.updateX correspondente
+ */
+function openEditModal(title, bodyHtml, onSave){
+  modalTitleEl.textContent = title;
+  modalBodyEl.innerHTML = `<div class="form-grid">${bodyHtml}</div>`;
+  modalOverlay.classList.add('open');
+  modalSaveBtn.onclick = ()=>withBusy(modalSaveBtn, async ()=>{
+    await onSave();
+    closeModal();
+    await api.loadAll();
+    renderAll();
+  });
+}
+function fieldVal(id){ return document.getElementById(id).value.trim(); }
+
+function openClienteEdit(id){
+  const c = state.clientes.find(x=>String(x.id)===String(id));
+  if(!c) return;
+  openEditModal(`Editar cliente — ${c.nome}`, `
+    <div class="field"><label>Nome / Razão social</label><input id="em-cli-nome" value="${esc(c.nome)||''}"></div>
+    <div class="field"><label>CNPJ/CPF</label><input id="em-cli-doc" value="${esc(c.documento)||''}"></div>
+    <div class="field"><label>Telefone</label><input id="em-cli-tel" value="${esc(c.telefone)||''}"></div>
+    <div class="field"><label>Cidade</label><input id="em-cli-cidade" value="${esc(c.cidade)||''}"></div>
+    <div class="field"><label>UF</label><input id="em-cli-uf" maxlength="2" style="text-transform:uppercase;" value="${esc(c.uf)||''}"></div>
+  `, async ()=>{
+    const nome = fieldVal('em-cli-nome');
+    if(!nome){ throw new Error('Informe o nome do cliente'); }
+    await api.updateCliente(c.id, {
+      nome,
+      documento: fieldVal('em-cli-doc')||null,
+      telefone: fieldVal('em-cli-tel')||null,
+      cidade: fieldVal('em-cli-cidade')||null,
+      uf: fieldVal('em-cli-uf').toUpperCase()||null,
+    });
+    toast(`Cliente ${nome} atualizado`);
+  });
+}
+
+function openVeiculoEdit(placa){
+  const v = state.veiculos.find(x=>x.placa===placa);
+  if(!v) return;
+  const tipos = ['Truck','Toco','Carreta','Van','Utilitário'];
+  openEditModal(`Editar veículo — ${v.placa}`, `
+    <div class="field"><label>Placa</label><input class="modal-readonly" value="${esc(v.placa)}" disabled></div>
+    <div class="field"><label>Modelo</label><input id="em-vei-modelo" value="${esc(v.modelo)||''}"></div>
+    <div class="field"><label>Tipo</label><select id="em-vei-tipo">${tipos.map(t=>`<option ${t===v.tipo?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Capacidade (kg)</label><input id="em-vei-capacidade" type="number" min="1" value="${v.capacidade_kg||1000}"></div>
+  `, async ()=>{
+    await api.updateVeiculo(v.placa, {
+      modelo: fieldVal('em-vei-modelo')||'—',
+      tipo: document.getElementById('em-vei-tipo').value,
+      capacidade_kg: +document.getElementById('em-vei-capacidade').value || 1000,
+    });
+    toast(`Veículo ${v.placa} atualizado`);
+  });
+}
+
+function openMotoristaEdit(cpf){
+  const m = state.motoristas.find(x=>x.cpf===cpf);
+  if(!m) return;
+  openEditModal(`Editar motorista — ${m.nome}`, `
+    <div class="field"><label>CPF</label><input class="modal-readonly" value="${esc(m.cpf)}" disabled></div>
+    <div class="field"><label>Nome</label><input id="em-mot-nome" value="${esc(m.nome)||''}"></div>
+    <div class="field"><label>CNH</label><input id="em-mot-cnh" value="${esc(m.cnh)||''}"></div>
+    <div class="field"><label>Telefone</label><input id="em-mot-tel" value="${esc(m.telefone)||''}"></div>
+  `, async ()=>{
+    const nome = fieldVal('em-mot-nome');
+    if(!nome){ throw new Error('Informe o nome do motorista'); }
+    await api.updateMotorista(m.cpf, {
+      nome,
+      cnh: fieldVal('em-mot-cnh')||null,
+      telefone: fieldVal('em-mot-tel')||null,
+    });
+    toast(`Motorista ${nome} atualizado`);
+  });
+}
+
+function openFreteEdit(id){
+  const f = state.fretes.find(x=>x.id===id);
+  if(!f) return;
+  const clienteOptions = (selectedId)=> state.clientes.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${esc(c.nome)}</option>`).join('');
+  const statusOptions = ['Aguardando coleta','Coletado','Em rota','Entregue','Ocorrência'];
+  openEditModal(`Editar frete — ${f.id}`, `
+    <div class="field"><label>Remetente</label><select id="em-frt-remetente">${clienteOptions(f.remetente_id)}</select></div>
+    <div class="field"><label>Destinatário</label><select id="em-frt-destinatario">${clienteOptions(f.destinatario_id)}</select></div>
+    <div class="field"><label>Endereço de coleta</label><input id="em-frt-coleta" value="${esc(f.endereco_coleta)||''}"></div>
+    <div class="field"><label>Endereço de entrega</label><input id="em-frt-entrega" value="${esc(f.endereco_entrega)||''}"></div>
+    <div class="field" style="grid-column:1/-1;"><label>Descrição da carga</label><input id="em-frt-desc" value="${esc(f.descricao_carga)||''}"></div>
+    <div class="field"><label>Peso (kg)</label><input id="em-frt-peso" type="number" min="0" value="${f.peso_kg||0}"></div>
+    <div class="field"><label>Volumes</label><input id="em-frt-volumes" type="number" min="1" value="${f.volumes||1}"></div>
+    <div class="field"><label>Valor do frete (R$)</label><input id="em-frt-valor" type="number" min="0" step="0.01" value="${f.valor_frete||0}"></div>
+    <div class="field"><label>Status</label><select id="em-frt-status">${statusOptions.map(s=>`<option ${s===f.status?'selected':''}>${s}</option>`).join('')}</select></div>
+  `, async ()=>{
+    await api.updateFrete(f.id, {
+      remetente_id: +document.getElementById('em-frt-remetente').value,
+      destinatario_id: +document.getElementById('em-frt-destinatario').value,
+      endereco_coleta: fieldVal('em-frt-coleta')||null,
+      endereco_entrega: fieldVal('em-frt-entrega')||null,
+      descricao_carga: fieldVal('em-frt-desc')||null,
+      peso_kg: +document.getElementById('em-frt-peso').value || 0,
+      volumes: +document.getElementById('em-frt-volumes').value || 1,
+      valor_frete: +document.getElementById('em-frt-valor').value || 0,
+      status: document.getElementById('em-frt-status').value,
+    });
+    toast(`Frete ${f.id} atualizado`);
+  });
+}
+
+function openViagemEdit(id){
+  const v = state.viagens.find(x=>x.id===id);
+  if(!v) return;
+  const statusOptions = ['Planejada','Em andamento','Concluída'];
+  openEditModal(`Editar viagem — ${v.id}`, `
+    <div class="field"><label>Motorista</label><select id="em-via-motorista">${state.motoristas.map(m=>`<option value="${m.cpf}" ${m.cpf===v.motorista_cpf?'selected':''}>${esc(m.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Veículo</label><select id="em-via-veiculo">${state.veiculos.map(vv=>`<option value="${vv.placa}" ${vv.placa===v.veiculo_placa?'selected':''}>${vv.placa} — ${esc(vv.modelo)}</option>`).join('')}</select></div>
+    <div class="field"><label>Data de saída</label><input id="em-via-data" type="date" value="${v.data_saida ? String(v.data_saida).slice(0,10) : ''}"></div>
+    <div class="field"><label>Origem</label><input id="em-via-origem" value="${esc(v.origem)||''}"></div>
+    <div class="field"><label>Status</label><select id="em-via-status">${statusOptions.map(s=>`<option ${s===v.status?'selected':''}>${s}</option>`).join('')}</select></div>
+  `, async ()=>{
+    await api.updateViagem(v.id, {
+      motorista_cpf: document.getElementById('em-via-motorista').value,
+      veiculo_placa: document.getElementById('em-via-veiculo').value,
+      data_saida: document.getElementById('em-via-data').value || null,
+      origem: fieldVal('em-via-origem')||null,
+      status: document.getElementById('em-via-status').value,
+    });
+    toast(`Viagem ${v.id} atualizada`);
+  });
+}
+
+function openOcorrenciaEdit(id){
+  const o = state.ocorrencias.find(x=>String(x.id)===String(id));
+  if(!o) return;
+  const tipos = ['Atraso','Avaria','Extravio','Outro'];
+  openEditModal(`Editar ocorrência — frete ${o.frete_id}`, `
+    <div class="field"><label>Frete</label><input class="modal-readonly" value="${esc(o.frete_id)}" disabled></div>
+    <div class="field"><label>Tipo</label><select id="em-oco-tipo">${tipos.map(t=>`<option ${t===o.tipo?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field" style="grid-column:1/-1;"><label>Descrição</label><input id="em-oco-desc" value="${esc(o.descricao)||''}"></div>
+  `, async ()=>{
+    await api.updateOcorrencia(o.id, {
+      tipo: document.getElementById('em-oco-tipo').value,
+      descricao: fieldVal('em-oco-desc')||null,
+    });
+    toast('Ocorrência atualizada');
+  });
+}
+
+/* =========================================================================
    NAVEGAÇÃO
    ========================================================================= */
 const VIEW_META = {
@@ -646,8 +876,9 @@ function renderClientes(){
   renderClientesForm();
   const body = document.getElementById('tbl-clientes');
   body.innerHTML = state.clientes.length ? state.clientes.map(c=>`
-    <tr><td><b>${esc(c.nome)}</b></td><td>${esc(c.documento)||'—'}</td><td>${esc(c.telefone)||'—'}</td><td>${esc(c.cidade)||'—'}</td><td>${esc(c.uf)||'—'}</td></tr>
+    <tr data-clickable data-cli-id="${c.id}"><td><b>${esc(c.nome)}</b></td><td>${esc(c.documento)||'—'}</td><td>${esc(c.telefone)||'—'}</td><td>${esc(c.cidade)||'—'}</td><td>${esc(c.uf)||'—'}</td></tr>
   `).join('') : `<tr class="empty-row"><td colspan="5">Nenhum cliente cadastrado.</td></tr>`;
+  body.querySelectorAll('tr[data-cli-id]').forEach(tr=>tr.onclick = ()=>openClienteEdit(tr.dataset.cliId));
 }
 
 /* =========================================================================
@@ -707,11 +938,13 @@ function renderFrota(){
   renderVeiculoForm();
   renderMotoristaForm();
   document.getElementById('tbl-veiculos').innerHTML = state.veiculos.length ? state.veiculos.map(v=>`
-    <tr><td><span class="sku">${v.placa}</span></td><td>${esc(v.modelo)}</td><td>${esc(v.tipo)}</td><td class="num">${v.capacidade_kg||'—'} kg</td><td>${statusChip(veiculoStatus(v.placa))}</td></tr>
+    <tr data-clickable data-vei-placa="${v.placa}"><td><span class="sku">${v.placa}</span></td><td>${esc(v.modelo)}</td><td>${esc(v.tipo)}</td><td class="num">${v.capacidade_kg||'—'} kg</td><td>${statusChip(veiculoStatus(v.placa))}</td></tr>
   `).join('') : `<tr class="empty-row"><td colspan="5">Nenhum veículo cadastrado.</td></tr>`;
   document.getElementById('tbl-motoristas').innerHTML = state.motoristas.length ? state.motoristas.map(m=>`
-    <tr><td><b>${esc(m.nome)}</b></td><td>${esc(m.cnh)||'—'}</td><td>${esc(m.telefone)||'—'}</td><td>${statusChip(motoristaStatus(m.cpf))}</td></tr>
+    <tr data-clickable data-mot-cpf="${m.cpf}"><td><b>${esc(m.nome)}</b></td><td>${esc(m.cnh)||'—'}</td><td>${esc(m.telefone)||'—'}</td><td>${statusChip(motoristaStatus(m.cpf))}</td></tr>
   `).join('') : `<tr class="empty-row"><td colspan="4">Nenhum motorista cadastrado.</td></tr>`;
+  document.querySelectorAll('#tbl-veiculos tr[data-vei-placa]').forEach(tr=>tr.onclick = ()=>openVeiculoEdit(tr.dataset.veiPlaca));
+  document.querySelectorAll('#tbl-motoristas tr[data-mot-cpf]').forEach(tr=>tr.onclick = ()=>openMotoristaEdit(tr.dataset.motCpf));
 }
 
 /* =========================================================================
@@ -754,7 +987,7 @@ function renderFretes(){
   renderFretesForm();
   const body = document.getElementById('tbl-fretes');
   body.innerHTML = state.fretes.length ? state.fretes.map(f=>`
-    <tr>
+    <tr data-clickable data-frt-id="${f.id}">
       <td><b>${f.id}</b></td>
       <td>${esc(clienteNome(f.remetente_id))}</td>
       <td>${esc(clienteNome(f.destinatario_id))}</td>
@@ -765,6 +998,7 @@ function renderFretes(){
       <td>${statusChip(f.status)}</td>
     </tr>
   `).join('') : `<tr class="empty-row"><td colspan="8">Nenhum frete cadastrado.</td></tr>`;
+  body.querySelectorAll('tr[data-frt-id]').forEach(tr=>tr.onclick = ()=>openFreteEdit(tr.dataset.frtId));
 }
 
 /* =========================================================================
@@ -802,7 +1036,7 @@ function renderViagens(){
   body.innerHTML = state.viagens.length ? state.viagens.map(v=>{
     const n = fretesDaViagem(v.id).length;
     const advanceBtn = v.status!=='Concluída' ? `<button class="btn btn-sm btn-amber via-advance" data-id="${v.id}" data-status="${v.status}">Avançar</button>` : '';
-    return `<tr>
+    return `<tr data-clickable data-via-id="${v.id}">
       <td><b>${v.id}</b></td>
       <td>${esc(motoristaName(v.motorista_cpf))}</td>
       <td>${esc(veiculoLabel(v.veiculo_placa))}</td>
@@ -813,6 +1047,11 @@ function renderViagens(){
       <td style="display:flex;gap:6px;">${advanceBtn}<button class="btn btn-sm btn-ghost via-manage" data-id="${v.id}">Gerenciar</button></td>
     </tr>`;
   }).join('') : `<tr class="empty-row"><td colspan="8">Nenhuma viagem cadastrada.</td></tr>`;
+
+  body.querySelectorAll('tr[data-via-id]').forEach(tr=>tr.onclick = (e)=>{
+    if(e.target.closest('button')) return;
+    openViagemEdit(tr.dataset.viaId);
+  });
 
   body.querySelectorAll('.via-advance').forEach(btn=>btn.onclick = ()=>withBusy(btn, async ()=>{
     await api.advanceViagem(btn.dataset.id, btn.dataset.status);
@@ -916,8 +1155,9 @@ function renderOcorrencias(){
   renderOcorrenciasForm();
   const body = document.getElementById('tbl-ocorrencias');
   body.innerHTML = state.ocorrencias.length ? state.ocorrencias.map(o=>`
-    <tr><td>${new Date(o.created_at).toLocaleDateString('pt-BR')}</td><td><b>${o.frete_id}</b></td><td>${esc(clienteNome((state.fretes.find(f=>f.id===o.frete_id)||{}).destinatario_id))}</td><td><span class="chip chip-red">${esc(o.tipo)}</span></td><td>${esc(o.descricao)||'—'}</td></tr>
+    <tr data-clickable data-oco-id="${o.id}"><td>${new Date(o.created_at).toLocaleDateString('pt-BR')}</td><td><b>${o.frete_id}</b></td><td>${esc(clienteNome((state.fretes.find(f=>f.id===o.frete_id)||{}).destinatario_id))}</td><td><span class="chip chip-red">${esc(o.tipo)}</span></td><td>${esc(o.descricao)||'—'}</td></tr>
   `).join('') : `<tr class="empty-row"><td colspan="5">Nenhuma ocorrência registrada.</td></tr>`;
+  body.querySelectorAll('tr[data-oco-id]').forEach(tr=>tr.onclick = ()=>openOcorrenciaEdit(tr.dataset.ocoId));
 }
 
 /* =========================================================================
