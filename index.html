@@ -124,11 +124,13 @@
   .btn-sm{padding:6px 10px;font-size:12px;border-radius:7px;}
   .btn[disabled]{opacity:0.55;cursor:default;}
 
-  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px;}
-  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 16px 14px;position:relative;overflow:hidden;box-shadow:var(--shadow-sm);}
-  .kpi .kpi-icon{position:absolute;top:14px;right:14px;width:27px;height:27px;border-radius:7px;display:flex;align-items:center;justify-content:center;}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px;}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 44px 14px 16px;position:relative;overflow:hidden;box-shadow:var(--shadow-sm);cursor:pointer;transition:box-shadow .15s ease,transform .12s ease,border-color .15s ease;}
+  .kpi:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);border-color:var(--border-strong);}
+  .kpi:active{transform:translateY(0);}
+  .kpi .kpi-icon{position:absolute;top:14px;right:14px;width:27px;height:27px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .kpi .kpi-icon svg{width:14px;height:14px;stroke:currentColor;fill:none;}
-  .kpi-label{font-size:11.3px;color:var(--ink-soft);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;}
+  .kpi-label{font-size:11.3px;color:var(--ink-soft);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;line-height:1.4;}
   .kpi-value{font-family:var(--mono);font-size:25px;font-weight:600;margin-top:8px;}
   .kpi-note{font-size:11.3px;color:var(--ink-faint);margin-top:3px;}
   .kpi.warn .kpi-value{color:var(--red);}
@@ -195,7 +197,7 @@
   .toast::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;}
   @keyframes slidein{from{opacity:0;transform:translateX(14px);}to{opacity:1;transform:none;}}
 
-  @media (max-width:1080px){.kpi-row{grid-template-columns:repeat(2,1fr);} .grid-2{grid-template-columns:1fr;}}
+  @media (max-width:1080px){.grid-2{grid-template-columns:1fr;}}
   @media (max-width:760px){
     .sidebar{position:fixed;left:-246px;z-index:50;transition:left .18s ease;}
     .sidebar.open{left:0;}
@@ -565,6 +567,11 @@ document.getElementById('nav').addEventListener('click', (e)=>{
   if(!btn) return;
   showView(btn.dataset.view);
 });
+document.getElementById('kpi-row').addEventListener('click', (e)=>{
+  const card = e.target.closest('.kpi');
+  if(!card || !card.dataset.view) return;
+  showView(card.dataset.view);
+});
 function showView(id){
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.view===id));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+id));
@@ -587,11 +594,11 @@ function renderDashboard(){
   document.getElementById('badge-ocorrencias').textContent = ocorrenciasAbertas || '';
 
   document.getElementById('kpi-row').innerHTML = `
-    <div class="kpi ${veicDisp===0?'warn':'ok'}"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><rect x="1" y="7" width="14" height="10" rx="1.2"/><path d="M15 10h4l3 3v4h-7z"/></svg></div><div class="kpi-label">Veículos disponíveis</div><div class="kpi-value">${veicDisp}</div><div class="kpi-note">de ${state.veiculos.length} na frota</div></div>
-    <div class="kpi ${motoDisp===0?'warn':'ok'}"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><div class="kpi-label">Motoristas disponíveis</div><div class="kpi-value">${motoDisp}</div><div class="kpi-note">de ${state.motoristas.length} cadastrados</div></div>
-    <div class="kpi ${pendentes.length>0?'amber':'ok'}"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg></div><div class="kpi-label">Fretes aguardando coleta</div><div class="kpi-value">${pendentes.length}</div><div class="kpi-note">de ${state.fretes.length} fretes no total</div></div>
-    <div class="kpi info"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2z"/></svg></div><div class="kpi-label">Viagens em andamento</div><div class="kpi-value">${emAndamento}</div><div class="kpi-note">de ${state.viagens.length} viagens</div></div>
-    <div class="kpi ${ocorrenciasAbertas>0?'warn':'ok'}"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2 20h20L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div><div class="kpi-label">Ocorrências em aberto</div><div class="kpi-value">${ocorrenciasAbertas}</div><div class="kpi-note">fretes com imprevistos</div></div>
+    <div class="kpi ${veicDisp===0?'warn':'ok'}" data-view="frota"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><rect x="1" y="7" width="14" height="10" rx="1.2"/><path d="M15 10h4l3 3v4h-7z"/></svg></div><div class="kpi-label">Veículos disponíveis</div><div class="kpi-value">${veicDisp}</div><div class="kpi-note">de ${state.veiculos.length} na frota</div></div>
+    <div class="kpi ${motoDisp===0?'warn':'ok'}" data-view="frota"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><div class="kpi-label">Motoristas disponíveis</div><div class="kpi-value">${motoDisp}</div><div class="kpi-note">de ${state.motoristas.length} cadastrados</div></div>
+    <div class="kpi ${pendentes.length>0?'amber':'ok'}" data-view="fretes"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg></div><div class="kpi-label">Fretes aguardando coleta</div><div class="kpi-value">${pendentes.length}</div><div class="kpi-note">de ${state.fretes.length} fretes no total</div></div>
+    <div class="kpi info" data-view="viagens"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2z"/></svg></div><div class="kpi-label">Viagens em andamento</div><div class="kpi-value">${emAndamento}</div><div class="kpi-note">de ${state.viagens.length} viagens</div></div>
+    <div class="kpi ${ocorrenciasAbertas>0?'warn':'ok'}" data-view="ocorrencias"><div class="kpi-icon"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2 20h20L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div><div class="kpi-label">Ocorrências em aberto</div><div class="kpi-value">${ocorrenciasAbertas}</div><div class="kpi-note">fretes com imprevistos</div></div>
   `;
 
   const body = document.getElementById('tbl-pending-pickup');
