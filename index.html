@@ -393,6 +393,25 @@
 
 <script>
 /* =========================================================================
+   TRATAMENTO DE ERROS GLOBAL — mostra um aviso visível em vez de página
+   em branco caso algo quebre durante o carregamento (ex: CDN bloqueado,
+   erro de configuração do Supabase, etc.)
+   ========================================================================= */
+window.addEventListener('error', function(e){
+  console.error('Erro na aplicação:', e.error || e.message);
+  if(document.getElementById('app-fatal-error')) return;
+  const banner = document.createElement('div');
+  banner.id = 'app-fatal-error';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#B94436;color:#fff;padding:12px 20px;font-family:system-ui,sans-serif;font-size:13px;z-index:9999;line-height:1.5;';
+  banner.textContent = 'Ocorreu um erro ao carregar o app: ' + (e.message || 'erro desconhecido') + ' — abra o console do navegador (F12) para mais detalhes.';
+  document.body.prepend(banner);
+});
+if(!window.supabase){
+  document.body.innerHTML = '<div style="padding:40px;font-family:system-ui,sans-serif;color:#B94436;max-width:520px;margin:60px auto;line-height:1.6;">Não foi possível carregar a biblioteca do Supabase (o script de <code>cdn.jsdelivr.net</code> não rodou). Isso costuma acontecer por bloqueio de rede/CDN ou por falta de conexão no momento do carregamento. Recarregue a página; se persistir, verifique se o domínio <code>cdn.jsdelivr.net</code> está liberado no ambiente onde a página foi publicada.</div>';
+  throw new Error('Supabase SDK (window.supabase) não encontrado.');
+}
+
+/* =========================================================================
    CONFIGURAÇÃO SUPABASE
    ========================================================================= */
 const SUPABASE_URL = "https://opckgihstiapaypqboud.supabase.co";
