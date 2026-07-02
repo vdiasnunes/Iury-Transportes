@@ -209,12 +209,20 @@
   tbody tr[data-clickable]{cursor:pointer;}
   tbody tr[data-clickable]:hover{background:rgba(47,143,224,0.06);}
 
+  .sidebar-toggle-btn{display:none;background:none;border:none;color:var(--ink);cursor:pointer;padding:6px;border-radius:8px;margin-right:4px;flex-shrink:0;}
+  .sidebar-toggle-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;display:block;}
+  .sidebar-toggle-btn:hover{background:rgba(0,0,0,0.05);}
+  .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(15,27,64,0.35);z-index:49;}
+  .sidebar-backdrop.open{display:block;}
+
   @media (max-width:1080px){.grid-2{grid-template-columns:1fr;}}
   @media (max-width:760px){
     .sidebar{position:fixed;left:-246px;z-index:50;transition:left .18s ease;}
     .sidebar.open{left:0;}
     .view-body,.topbar{padding-left:18px;padding-right:18px;}
     .search-box{display:none;}
+    .sidebar-toggle-btn{display:inline-flex;align-items:center;justify-content:center;}
+    .topbar{align-items:center;}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>
@@ -278,12 +286,16 @@
       <button class="logout-btn" id="logout-btn" title="Sair"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
     </div>
   </aside>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
   <main class="content">
     <div class="topbar">
-      <div>
-        <h1 id="view-title">Dashboard</h1>
-        <p id="view-subtitle">Panorama geral da operação: frota, fretes em andamento e ocorrências.</p>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-label="Abrir menu"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+        <div>
+          <h1 id="view-title">Dashboard</h1>
+          <p id="view-subtitle">Panorama geral da operação: frota, fretes em andamento e ocorrências.</p>
+        </div>
       </div>
       <div class="topbar-right">
         <div class="search-box"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="Buscar frete, cliente…" id="global-search"></div>
@@ -364,7 +376,8 @@
         <div class="panel">
           <div class="panel-head"><div><h3>Usuários</h3><div class="sub">Defina a role de cada pessoa e vincule motoristas às contas de login.</div></div></div>
           <div class="panel-body">
-            <div class="helper" style="margin-top:0;margin-bottom:14px;">Novas contas aparecem aqui automaticamente assim que a pessoa se cadastra pela tela de login ("Criar conta"). Clique em um usuário para definir a role.</div>
+            <div id="usuario-form-slot"></div>
+            <div class="helper" style="margin-top:0;margin-bottom:14px;">Novas contas também aparecem aqui automaticamente quando a pessoa se cadastra pela tela de login ("Criar conta") — nesse caso, entram como Motorista por padrão. Clique em um usuário para editar a role.</div>
             <table><thead><tr><th>E-mail</th><th>Nome</th><th>Role</th><th>Motorista vinculado</th></tr></thead><tbody id="tbl-usuarios"></tbody></table>
           </div>
         </div>
@@ -703,6 +716,32 @@ const api = {
     if(error) throw error;
     await logActivity(`Usuário ${patch.nome||id} atualizado (role: ${patch.role})`);
   },
+  /**
+   * Cria uma nova conta de usuário (usada pelo botão "Adicionar usuário" na
+   * página de Usuários). Usa fetch() direto no endpoint de signup do Supabase
+   * Auth (em vez de sb.auth.signUp) para NÃO substituir a sessão do
+   * administrador que está logado no momento — sb.auth.signUp trocaria a
+   * sessão local para a conta recém-criada, o que derrubaria o admin.
+   */
+  async createUsuario({email, password, nome, role, motorista_cpf}){
+    let res;
+    try{
+      res = await fetch(SUPABASE_URL + '/auth/v1/signup', {
+        method:'POST',
+        headers:{'Content-Type':'application/json', apikey:SUPABASE_ANON_KEY},
+        body: JSON.stringify({email, password})
+      });
+    }catch(e){
+      throw new Error('Falha de rede ao criar a conta no Supabase.');
+    }
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error_description || data.msg || data.error || ('Erro ao criar conta (status '+res.status+')'));
+    const newId = (data.user && data.user.id) || data.id;
+    if(!newId) throw new Error('Não foi possível obter o ID do novo usuário na resposta do Supabase.');
+    const {error} = await sb.from('usuarios').insert({id:newId, email, nome, role, motorista_cpf: role==='motorista' ? motorista_cpf : null});
+    if(error) throw error;
+    await logActivity(`Usuário ${email} cadastrado (role: ${role})`);
+  },
 };
 async function logActivity(text){ await sb.from('activity_log').insert({text}); }
 
@@ -789,7 +828,22 @@ async function loadCurrentUser(authUser){
       'Tempo esgotado ao verificar o usuário no Supabase.'
     );
     if(error) throw error;
-    currentUser = data || {id:authUser.id, email:authUser.email, nome:null, role:'operacional', motorista_cpf:null};
+    if(data){
+      currentUser = data;
+    } else {
+      // Não existe registro em "usuarios" para essa conta — isso só acontece
+      // para contas criadas pela própria pessoa no botão "Criar conta" da tela
+      // de login (contas criadas pelo admin já nascem com um registro, veja
+      // api.createUsuario). Por padrão, essas contas entram como "motorista".
+      const novoUsuario = {id:authUser.id, email:authUser.email, nome:null, role:'motorista', motorista_cpf:null};
+      try{
+        const {error:insErr} = await sb.from('usuarios').insert(novoUsuario);
+        if(insErr) throw insErr;
+      }catch(insErr){
+        console.error('Não foi possível salvar o registro do novo usuário (seguindo apenas em memória):', insErr);
+      }
+      currentUser = novoUsuario;
+    }
   }catch(err){
     // Se a tabela "usuarios" ainda não existe, ou a conexão travou/expirou,
     // trata todo mundo como "operacional" para não travar o acesso ao sistema.
@@ -1187,6 +1241,7 @@ document.getElementById('nav').addEventListener('click', (e)=>{
   const btn = e.target.closest('.nav-item');
   if(!btn) return;
   showView(btn.dataset.view);
+  closeSidebar();
 });
 document.getElementById('kpi-row').addEventListener('click', (e)=>{
   const card = e.target.closest('.kpi');
@@ -1199,6 +1254,18 @@ function showView(id){
   document.getElementById('view-title').textContent = VIEW_META[id].title;
   document.getElementById('view-subtitle').textContent = VIEW_META[id].sub;
 }
+
+/* =========================================================================
+   MENU MOBILE (sidebar off-canvas em telas estreitas)
+   ========================================================================= */
+const sidebarEl = document.querySelector('.sidebar');
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+function openSidebar(){ sidebarEl.classList.add('open'); sidebarBackdrop.classList.add('open'); }
+function closeSidebar(){ sidebarEl.classList.remove('open'); sidebarBackdrop.classList.remove('open'); }
+document.getElementById('sidebar-toggle-btn').onclick = ()=>{
+  sidebarEl.classList.contains('open') ? closeSidebar() : openSidebar();
+};
+sidebarBackdrop.onclick = closeSidebar;
 
 /* =========================================================================
    RENDER: DASHBOARD
@@ -1575,7 +1642,46 @@ function renderMinhasViagens(){
   }).join('') : `<tr class="empty-row"><td colspan="6">${cpf ? 'Nenhuma viagem atribuída a você no momento.' : 'Sua conta ainda não foi vinculada a um motorista. Fale com o administrativo.'}</td></tr>`;
   body.querySelectorAll('tr[data-mv-id]').forEach(tr=>tr.onclick = ()=>openMinhaViagemModal(tr.dataset.mvId));
 }
+function renderUsuarioForm(){
+  const slot = document.getElementById('usuario-form-slot');
+  if(!slot) return;
+  slot.innerHTML = `
+    <div class="inline-form">
+      <div class="form-grid">
+        <div class="field"><label>Nome</label><input id="usr-nome" placeholder="Nome completo"></div>
+        <div class="field"><label>E-mail</label><input id="usr-email" type="email" placeholder="pessoa@empresa.com"></div>
+        <div class="field"><label>Senha provisória</label><input id="usr-senha" type="password" placeholder="mínimo 6 caracteres"></div>
+        <div class="field"><label>Role</label><select id="usr-role">
+          <option value="operacional">Operacional</option>
+          <option value="administrativo">Administrativo</option>
+          <option value="motorista">Motorista</option>
+        </select></div>
+        <div class="field" style="grid-column:1/-1;"><label>Motorista vinculado (obrigatório se a role for Motorista)</label>
+          <select id="usr-motorista">
+            <option value="">— nenhum —</option>
+            ${state.motoristas.map(m=>`<option value="${m.cpf}">${esc(m.nome)} (${m.cpf})</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" id="usr-submit"><svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Adicionar usuário</button></div>
+    </div>`;
+  document.getElementById('usr-submit').onclick = (e)=>withBusy(e.target.closest('button'), async ()=>{
+    const nome = document.getElementById('usr-nome').value.trim() || null;
+    const email = document.getElementById('usr-email').value.trim();
+    const password = document.getElementById('usr-senha').value;
+    const role = document.getElementById('usr-role').value;
+    const motorista_cpf = document.getElementById('usr-motorista').value || null;
+    if(!email){ toast('Informe o e-mail do usuário', true); return; }
+    if(!password || password.length < 6){ toast('A senha deve ter pelo menos 6 caracteres', true); return; }
+    if(role==='motorista' && !motorista_cpf){ toast('Selecione o motorista vinculado a esta conta', true); return; }
+    await api.createUsuario({email, password, nome, role, motorista_cpf});
+    toast(`Usuário ${email} cadastrado`);
+    await api.loadAll();
+    renderAll();
+  });
+}
 function renderUsuarios(){
+  renderUsuarioForm();
   const body = document.getElementById('tbl-usuarios');
   if(!body) return;
   body.innerHTML = state.usuarios.length ? state.usuarios.map(u=>`
